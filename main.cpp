@@ -5,10 +5,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "shader.h"
-#include "camera.h"
-#include "model.h"
-#include "filesystem.h"
+#include "graphics-components/shader.h"
+#include "graphics-components/camera.h"
+#include "loader/model.h"
+#include "loader/filesystem.h"
 
 #include <iostream>
 
@@ -43,19 +43,16 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
-
     // glfw window creation
     // --------------------
-    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
-    if (window == NULL)
+    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", nullptr, nullptr);
+    if (window == nullptr)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
         return -1;
     }
+
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
@@ -81,7 +78,7 @@ int main()
 
     // build and compile shaders
     // -------------------------
-    Shader ourShader("model_loading.vs", "model_loading.fs");
+    Shader ourShader("shaders/model_loading.vs", "shaders/model_loading.fs");
 
     // load models
     // -----------
@@ -97,9 +94,9 @@ int main()
     {
         // per-frame time logic
         // --------------------
-        float currentFrame = static_cast<float>(glfwGetTime());
-        deltaTime          = currentFrame - lastFrame;
-        lastFrame          = currentFrame;
+        auto currentFrame = static_cast<float>(glfwGetTime());
+        deltaTime         = currentFrame - lastFrame;
+        lastFrame         = currentFrame;
 
         // input
         // -----
@@ -121,8 +118,8 @@ int main()
         ourShader.setMat4("view", view);
 
         // render the loaded model
-        glm::mat4 model = glm::mat4(1.0f);
-        model           = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
+        auto model = glm::mat4(1.0f);
+        model      = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
         // translate it down so it's at the center of the scene
         model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f)); // it's a bit too big for our scene, so scale it down
         ourShader.setMat4("model", model);
@@ -171,8 +168,8 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 // -------------------------------------------------------
 void mouse_callback(GLFWwindow *window, double xposIn, double yposIn)
 {
-    float xpos = static_cast<float>(xposIn);
-    float ypos = static_cast<float>(yposIn);
+    auto xpos = static_cast<float>(xposIn);
+    auto ypos = static_cast<float>(yposIn);
 
     if (firstMouse)
     {

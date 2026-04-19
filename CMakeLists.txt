@@ -10,11 +10,11 @@ find_package(glm REQUIRED)
 set(CMAKE_CXX_STANDARD 20)
 
 add_executable(TechnologicalPractice main.cpp
-        shader.h
-        camera.h
-        model.h
-        mesh.h
-        filesystem.h
+        graphics-components/shader.h
+        graphics-components/camera.h
+        loader/model.h
+        graphics-components/mesh.h
+        loader/filesystem.h
 )
 target_link_libraries(TechnologicalPractice
         PRIVATE assimp::assimp
@@ -24,10 +24,6 @@ target_link_libraries(TechnologicalPractice
         opengl32
 )
 
-configure_file(
-        "${CMAKE_SOURCE_DIR}/root_directory.h.in"
-        "${CMAKE_BINARY_DIR}/root_directory.h"
-)
 
 include_directories(
         "${CMAKE_SOURCE_DIR}")
