@@ -4,7 +4,6 @@ project(TechnologicalPractice)
 find_package(assimp CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
-find_package(glad CONFIG REQUIRED)
 find_package(glm REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -18,11 +17,19 @@ add_executable(TechnologicalPractice main.cpp
 )
 target_link_libraries(TechnologicalPractice
         PRIVATE assimp::assimp
-        glad::glad
         glfw
         glm::glm
         opengl32
 )
+
+if (WIN32)
+    find_package(glad CONFIG REQUIRED)
+    target_link_libraries(TechnologicalPractice PRIVATE glad::glad)
+elseif (UNIX)
+    add_library(glad_lib STATIC glad/src/gl.c)
+    target_include_directories(glad_lib PUBLIC glad/include)
+    target_link_libraries(TechnologicalPractice PRIVATE glad_lib)
+endif ()
 
 
 include_directories(
