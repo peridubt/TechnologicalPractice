@@ -19,7 +19,7 @@ enum class Mode
 {
     Normal     = 1,
     Slice      = 2,
-    Silhouette = 3,
+    Projection = 3,
 };
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
@@ -57,7 +57,7 @@ float sliceYaw    = 0.0f;
 float slicePitch  = 0.0f;
 float sliceOffset = 0.0f;
 
-// Направление проекции силуэта. По умолчанию -- из +Z.
+// Направление проекции силуэта. По умолчанию - из +Z.
 float silYaw   = 0.0f;
 float silPitch = 0.0f;
 
@@ -126,7 +126,7 @@ struct MaskFBO
                                   GL_RENDERBUFFER, depth);
 
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-            std::cout << "WARNING: silhouette FBO incomplete" << std::endl;
+            std::cout << "WARNING: projection FBO incomplete" << std::endl;
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
@@ -140,7 +140,7 @@ int main()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, 4); // MSAA для более гладких линий среза
 
-    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Slice & Silhouette", nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Technological practice", nullptr, nullptr);
     if (window == nullptr)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -201,7 +201,7 @@ int main()
     std::cout << "Controls:\n"
             << "  1 -- 3D view (WASD + mouse)\n"
             << "  2 -- 2D cross-section (slice)\n"
-            << "  3 -- 2D projection / shadow silhouette\n"
+            << "  3 -- 2D projection / shadow projection\n"
             << "  Mode 2:  arrows = rotate plane, [ / ] = slide along normal\n"
             << "  Mode 3:  arrows = rotate projection direction\n";
 
@@ -222,7 +222,7 @@ int main()
         if (mode == Mode::Normal)
         {
             glViewport(0, 0, fbWidth, fbHeight);
-            glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+            glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             ourShader.use();
@@ -378,7 +378,7 @@ void processInput(GLFWwindow *window)
             sliceDirty  = true;
         }
         slicePitch = glm::clamp(slicePitch, -kPitchLimit, kPitchLimit);
-    } else // Silhouette
+    } else // projection
     {
         const float rotSpeed = 1.0f;
         if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
@@ -444,7 +444,7 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     }
     if (key == GLFW_KEY_3)
     {
-        mode = Mode::Silhouette;
-        std::cout << "[mode] silhouette (image-space)\n";
+        mode = Mode::Projection;
+        std::cout << "[mode] projection (image-space)\n";
     }
 }
