@@ -5,14 +5,18 @@ find_package(assimp CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
 find_package(glm REQUIRED)
+find_package(libigl CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
 
 add_executable(TechnologicalPractice main.cpp
         graphics-components/shader.h
         graphics-components/camera.h
-        loader/model.h
         graphics-components/mesh.h
+        graphics-components/line_mesh.h
+        graphics-components/igl_bridge.h
+        graphics-components/contours.h
+        loader/model.h
         loader/filesystem.h
 )
 target_link_libraries(TechnologicalPractice
@@ -20,7 +24,15 @@ target_link_libraries(TechnologicalPractice
         glfw
         glm::glm
         opengl32
+        igl::igl_core
 )
+
+
+if (WIN32)
+    target_compile_definitions(TechnologicalPractice PRIVATE
+            WIN32_LEAN_AND_MEAN
+            NOMINMAX)
+endif ()
 
 if (WIN32)
     find_package(glad CONFIG REQUIRED)
