@@ -14,6 +14,13 @@
 #include "loader/filesystem.h"
 
 #include <iostream>
+#include <memory>
+#include <string>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <commdlg.h>
+#endif
 
 enum class Mode
 {
@@ -30,7 +37,36 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
 
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
 
+void drop_callback(GLFWwindow *window, int count, const char **paths);
+
 void processInput(GLFWwindow *window);
+
+// Запрос на загрузку другой модели. Заполняется из callback-функций GLFW
+// (drop_callback, key_callback) и обрабатывается в основном цикле.
+static std::string g_pendingModelPath;
+
+// Открывает системный диалог выбора файла Windows и возвращает выбранный
+// путь, либо пустую строку, если пользователь отменил действие.
+static std::string pickModelFile()
+{
+#ifdef _WIN32
+    char buf[MAX_PATH] = {0};
+    std::string initialDir = FileSystem::getPath("models");
+
+    OPENFILENAMEA ofn{};
+    ofn.lStructSize  = sizeof(ofn);
+    ofn.hwndOwner    = nullptr;
+    ofn.lpstrFile    = buf;
+    ofn.nMaxFile     = MAX_PATH;
+    ofn.lpstrFilter  = "OBJ models (*.obj)\0*.obj\0All files (*.*)\0*.*\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrTitle   = "Select 3D model";
+    ofn.lpstrInitialDir = initialDir.c_str();
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    if (GetOpenFileNameA(&ofn)) return std::string(buf);
+#endif
+    return {};
+}
 
 const unsigned int SCR_WIDTH  = 800;
 const unsigned int SCR_HEIGHT = 600;
@@ -132,7 +168,7 @@ struct MaskFBO
     }
 };
 
-int main()
+int main(int argc, char **argv)
 {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -153,6 +189,7 @@ int main()
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
     glfwSetKeyCallback(window, key_callback);
+    glfwSetDropCallback(window, drop_callback);
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
@@ -168,22 +205,39 @@ int main()
     glEnable(GL_MULTISAMPLE);
     glLineWidth(2.0f);
 
-    Shader ourShader("shaders/model_loading.vs", "shaders/model_loading.fs");
-    Shader lineShader("shaders/line.vs", "shaders/line.fs");
-    Shader outlineShader("shaders/outline.vs", "shaders/outline.fs");
+    Shader ourShader(FileSystem::getPath("shaders/model_loading.vs").c_str(),
+                     FileSystem::getPath("shaders/model_loading.fs").c_str());
+    Shader lineShader(FileSystem::getPath("shaders/line.vs").c_str(),
+                      FileSystem::getPath("shaders/line.fs").c_str());
+    Shader outlineShader(FileSystem::getPath("shaders/outline.vs").c_str(),
+                         FileSystem::getPath("shaders/outline.fs").c_str());
 
-    Model ourModel(FileSystem::getPath("models/stanford-bunny.obj"));
+    // Стартовая модель: либо argv[1], либо stanford-bunny по умолчанию.
+    std::string initialPath = (argc > 1)
+                                  ? std::string(argv[1])
+                                  : FileSystem::getPath("models/backpack/backpack.obj");
 
-    // Строим libigl-представление: нужно только для алгоритма среза
+    auto ourModel = std::make_unique<Model>(initialPath);
+
+    // libigl-представление + AABB-параметры пересчитываются при каждой
+    // загрузке новой модели, поэтому вынесены в лямбду.
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
-    buildEigenMesh(ourModel, V, F);
+    glm::vec3 center{};
+    float radius     = 1.0f;
+    float halfExtent = 1.0f;
+    float camDist    = 3.0f;
 
-    AABB3 bbox       = computeAABB(V);
-    glm::vec3 center = bbox.center();
-    float radius     = std::max(bbox.radius(), 0.001f);
-    float halfExtent = radius * 1.1f;
-    float camDist    = radius * 3.0f;
+    auto rebuildFromModel = [&]() {
+        buildEigenMesh(*ourModel, V, F);
+        AABB3 bbox = computeAABB(V);
+        center     = bbox.center();
+        radius     = std::max(bbox.radius(), 0.001f);
+        halfExtent = radius * 1.1f;
+        camDist    = radius * 3.0f;
+        sliceDirty = true;
+    };
+    rebuildFromModel();
 
     LineMesh sliceLines;
     sliceLines.init();
@@ -203,7 +257,9 @@ int main()
             << "  2 -- 2D cross-section (slice)\n"
             << "  3 -- 2D projection / shadow projection\n"
             << "  Mode 2:  arrows = rotate plane, [ / ] = slide along normal\n"
-            << "  Mode 3:  arrows = rotate projection direction\n";
+            << "  Mode 3:  arrows = rotate projection direction\n"
+            << "  O       -- open 3D model file dialog\n"
+            << "  Drag&drop a .obj onto the window also loads it\n";
 
     while (!glfwWindowShouldClose(window))
     {
@@ -212,6 +268,24 @@ int main()
         lastFrame         = currentFrame;
 
         processInput(window);
+
+        // Обрабатываем отложенный запрос на загрузку другой модели,
+        // поступивший из callback-функций GLFW (drag&drop или клавиша O).
+        if (!g_pendingModelPath.empty())
+        {
+            std::string path = std::move(g_pendingModelPath);
+            g_pendingModelPath.clear();
+            try
+            {
+                auto newModel = std::make_unique<Model>(path);
+                ourModel      = std::move(newModel);
+                rebuildFromModel();
+                std::cout << "[model] loaded: " << path << "\n";
+            } catch (const std::exception &e)
+            {
+                std::cout << "[model] failed to load '" << path << "': " << e.what() << "\n";
+            }
+        }
 
         // Убеждаемся, что FBO соответствует текущему размеру фреймбуфера.
         if (maskFBO.w != fbWidth || maskFBO.h != fbHeight)
@@ -233,7 +307,17 @@ int main()
             ourShader.setMat4("projection", projection);
             ourShader.setMat4("view", view);
             ourShader.setMat4("model", modelMat);
-            ourModel.Draw(ourShader);
+
+            // Освещение (Blinn-Phong + нормал-маппинг). Источник --
+            // фиксированное направленное "солнце" сверху-спереди, цвет
+            // тёплый белый, плюс мягкий ambient, чтобы тёмные стороны
+            // не проваливались в чёрное.
+            ourShader.setVec3("uViewPos",     camera.Position);
+            ourShader.setVec3("uLightDir",    glm::normalize(glm::vec3(0.5f, 1.0f, 0.7f)));
+            ourShader.setVec3("uLightColor",  glm::vec3(1.0f, 0.97f, 0.92f));
+            ourShader.setVec3("uAmbient",     glm::vec3(0.18f));
+
+            ourModel->Draw(ourShader);
         } else if (mode == Mode::Slice)
         {
             // Нормаль плоскости: вращаем +Z сначала на yaw(Y), затем на pitch(X).
@@ -290,7 +374,7 @@ int main()
             lineShader.setMat4("view", view);
             lineShader.setMat4("model", modelMat);
             lineShader.setVec3("uColor", glm::vec3(1.0f, 1.0f, 1.0f));
-            ourModel.Draw(lineShader);
+            ourModel->Draw(lineShader);
 
             // Проход 2: edge-detection маски в стандартный фреймбуфер
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -447,4 +531,16 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         mode = Mode::Projection;
         std::cout << "[mode] projection (image-space)\n";
     }
+    if (key == GLFW_KEY_O)
+    {
+        std::string picked = pickModelFile();
+        if (!picked.empty()) g_pendingModelPath = picked;
+    }
+}
+
+void drop_callback(GLFWwindow *window, int count, const char **paths)
+{
+    // Берём последний из перетянутых файлов.
+    if (count > 0 && paths && paths[count - 1])
+        g_pendingModelPath = paths[count - 1];
 }
