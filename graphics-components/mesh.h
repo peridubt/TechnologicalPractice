@@ -92,6 +92,14 @@ public:
             glBindTexture(GL_TEXTURE_2D, textures[i].id);
         }
 
+        // Сообщаем фрагментному шейдеру, какие карты реально есть у меша.
+        // Локации, отсутствующие в шейдере (например, у line.fs), вернут -1
+        // и glUniform1i становится no-op -- безопасно.
+        glUniform1i(glGetUniformLocation(shader.ID, "uHasNormalMap"),
+                    normalNr   > 1 ? 1 : 0);
+        glUniform1i(glGetUniformLocation(shader.ID, "uHasSpecularMap"),
+                    specularNr > 1 ? 1 : 0);
+
         // draw mesh
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);

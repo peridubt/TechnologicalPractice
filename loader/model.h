@@ -66,8 +66,12 @@ private:
             cout << "ERROR::ASSIMP:: " << importer.GetErrorString() << endl;
             return;
         }
-        // retrieve the directory path of the filepath
-        directory = path.substr(0, path.find_last_of('/'));
+        // Извлекаем каталог из пути модели. Учитываем оба варианта
+        // разделителя (`/` и `\\`), потому что путь может прийти как из
+        // FileSystem::getPath (прямые слеши), так и из системного диалога
+        // выбора файла Windows (обратные слеши).
+        size_t slash = path.find_last_of("/\\");
+        directory = (slash == std::string::npos) ? "." : path.substr(0, slash);
 
         // process ASSIMP's root node recursively
         processNode(scene->mRootNode, scene);
